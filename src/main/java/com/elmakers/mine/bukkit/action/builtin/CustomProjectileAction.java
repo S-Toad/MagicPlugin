@@ -15,6 +15,8 @@ import com.elmakers.mine.bukkit.utility.ConfigurationUtils;
 import com.elmakers.mine.bukkit.utility.Target;
 import com.elmakers.mine.bukkit.utility.Targeting;
 import de.slikey.effectlib.util.DynamicLocation;
+import de.slikey.effectlib.util.VectorUtils;
+
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
@@ -26,10 +28,7 @@ import org.bukkit.util.Vector;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Random;
-import java.util.Set;
-import java.util.UUID;
 
 public class CustomProjectileAction extends CompoundAction
 {
@@ -94,6 +93,14 @@ public class CustomProjectileAction extends CompoundAction
     private long targetSelfDeadline;
     private DynamicLocation effectLocation = null;
     private Collection<EffectPlay> activeProjectileEffects;
+    
+    private boolean returnToCaster;
+    private double returnDistanceSensitivity;
+    private Vector returnRelativeOffset = null;
+    private Vector returnOffset = null;
+    private double returnSpeed;
+    private double staticSpeed;
+    
 
     @Override
     public void initialize(Spell spell, ConfigurationSection parameters) {
@@ -160,11 +167,22 @@ public class CustomProjectileAction extends CompoundAction
         pitchMin = parameters.getInt("pitch_min", 90);
         pitchMax = parameters.getInt("pitch_max", -90);
         
+        returnToCaster = parameters.getBoolean("return_to_caster", false);
+        returnDistanceSensitivity = parameters.getDouble("return_distance_sensitivity", 0.5);
+        returnSpeed = parameters.getDouble("return_speed");
+        
         range *= context.getMage().getRangeMultiplier();
 
         speed = parameters.getDouble("speed", 1);
         speed = parameters.getDouble("velocity", speed * 20);
 
+        staticSpeed = speed;
+        
+        if (returnToCaster)
+        {
+            speed = returnSpeed;
+        }
+        
         // Some parameter tweaks to make sure things are sane
         TargetType targetType = targeting.getTargetType();
         if (targetType == TargetType.NONE) {
@@ -354,76 +372,107 @@ public class CustomProjectileAction extends CompoundAction
 
         // Apply gravity, drag or other velocity modifiers
         Vector targetVelocity = null;
-        if (trackEntity)
+        
+        if (returnToCaster) 
         {
-            Entity targetEntity = context.getTargetEntity();
-            if (targetEntity != null && targetEntity.isValid() && context.canTarget(targetEntity))
+            Vector targetLocation = context.getMage().getLocation().toVector();
+            
+            if (returnOffset != null) 
             {
-                Location targetLocation = targetEntity instanceof LivingEntity ?
-                        ((LivingEntity)targetEntity).getEyeLocation() : targetEntity.getLocation();
-                targetVelocity = targetLocation.toVector().subtract(projectileLocation.toVector()).normalize();
+                targetLocation.add(returnOffset);
             }
-        }
-        else if (trackCursorRange > 0)
-        {
-            /* We need to first find out where the player is looking and multiply it by how far the player wants the whip to extend
-        	 * Finally after all that, we adjust the velocity of the projectile to go towards the cursor point
-        	 */
-            Vector playerCursor = context.getDirection().clone().normalize().multiply(trackCursorRange);
-            playerCursor = context.getEyeLocation().toVector().add(playerCursor);
-            targetVelocity = playerCursor.subtract(projectileLocation.toVector()).normalize();
-        }
-        else if (reorient)
-        {
-            targetVelocity = context.getDirection().clone().normalize();
-        }
-        else
-        {
-            if (gravity > 0) {
-                velocity.setY(velocity.getY() - gravity * delta / 50).normalize();
-            }
-            if (drag > 0) {
-                speed -= drag * delta / 50;
-                if (speed <= 0) {
-                    return miss();
-                }
-            }
-        }
-
-        if (targetVelocity != null)
-        {
-            if (trackSpeed > 0)
+            
+            if (returnRelativeOffset != null)
             {
-                double steerDistanceSquared = trackSpeed * trackSpeed;
-                double distanceSquared = targetVelocity.distanceSquared(velocity);
-                if (distanceSquared <= steerDistanceSquared) {
-                    velocity = targetVelocity;
-                } else {
-                    Vector targetDirection = targetVelocity.subtract(velocity).normalize().multiply(steerDistanceSquared);
-                    velocity.add(targetDirection);
-                }
+                Vector offset = VectorUtils.rotateVector(returnRelativeOffset, context.getMage().getEyeLocation());
+                targetLocation.add(offset);
+            }
+            
+            Vector projectileLocationOffset = targetLocation.subtract(projectileLocation.toVector());
+            double distance = projectileLocationOffset.clone().length();
+            
+            if (distance < returnDistanceSensitivity) {
+                velocity = new Vector(0,0,0);
+                speed = staticSpeed;
             }
             else
             {
-                velocity = targetVelocity;
+                velocity = projectileLocationOffset.normalize();
             }
-            launchLocation.setDirection(velocity);
         }
-
-        if (velocityTransform != null)
+        else 
         {
-            targetVelocity = velocityTransform.get(launchLocation, (double)flightTime / 1000);
-
-            // This is expensive, but necessary for variable speed to work properly
-            // with targeting and range-checking
-            if (targetVelocity != null) {
-                speed = targetVelocity.length();
-                if (speed > 0) {
-                    targetVelocity.normalize();
-                } else {
-                    targetVelocity.setX(1);
+            if (trackEntity)
+            {
+                Entity targetEntity = context.getTargetEntity();
+                if (targetEntity != null && targetEntity.isValid() && context.canTarget(targetEntity))
+                {
+                    Location targetLocation = targetEntity instanceof LivingEntity ?
+                            ((LivingEntity)targetEntity).getEyeLocation() : targetEntity.getLocation();
+                    targetVelocity = targetLocation.toVector().subtract(projectileLocation.toVector()).normalize();
                 }
-                velocity = targetVelocity;
+            }
+            else if (trackCursorRange > 0)
+            {
+                /* We need to first find out where the player is looking and multiply it by how far the player wants the whip to extend
+            	 * Finally after all that, we adjust the velocity of the projectile to go towards the cursor point
+            	 */
+                Vector playerCursor = context.getDirection().clone().normalize().multiply(trackCursorRange);
+                playerCursor = context.getEyeLocation().toVector().add(playerCursor);
+                targetVelocity = playerCursor.subtract(projectileLocation.toVector()).normalize();
+            }
+            else if (reorient)
+            {
+                targetVelocity = context.getDirection().clone().normalize();
+            }
+            else
+            {
+                if (gravity > 0) {
+                    velocity.setY(velocity.getY() - gravity * delta / 50).normalize();
+                }
+                if (drag > 0) {
+                    speed -= drag * delta / 50;
+                    if (speed <= 0) {
+                        return miss();
+                    }
+                }
+            }
+    
+            if (targetVelocity != null)
+            {
+                if (trackSpeed > 0)
+                {
+                    double steerDistanceSquared = trackSpeed * trackSpeed;
+                    double distanceSquared = targetVelocity.distanceSquared(velocity);
+                    if (distanceSquared <= steerDistanceSquared) {
+                        velocity = targetVelocity;
+                    } else {
+                        Vector targetDirection = targetVelocity.subtract(velocity).normalize().multiply(steerDistanceSquared);
+                        velocity.add(targetDirection);
+                    }
+                }
+                else
+                {
+                    velocity = targetVelocity;
+                }
+                launchLocation.setDirection(velocity);
+            }
+    
+            if (velocityTransform != null)
+            {
+                targetVelocity = velocityTransform.get(launchLocation, (double)flightTime / 1000);
+    
+                // This is expensive, but necessary for variable speed to work properly
+                // with targeting and range-checking
+                if (targetVelocity != null) {
+                    speed = targetVelocity.length();
+                    if (speed > 0) {
+                        targetVelocity.normalize();
+                    } else {
+                        targetVelocity.setX(1);
+                    }
+                    velocity = targetVelocity;
+                }
             }
         }
 
