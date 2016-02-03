@@ -394,13 +394,13 @@ public class CustomProjectileAction extends CompoundAction
             double distance = projectileLocationOffset.clone().length();
             
             if (distance < returnDistanceSensitivity) {
-                velocity = new Vector(0,0,0);
+                targetVelocity = new Vector(0,0,0);
                 speed = startingSpeed;
                 returnToCaster = false;
             }
             else
             {
-                velocity = projectileLocationOffset.normalize();
+                targetVelocity = projectileLocationOffset.normalize();
             }
         }
         else 
