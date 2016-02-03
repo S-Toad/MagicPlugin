@@ -99,7 +99,7 @@ public class CustomProjectileAction extends CompoundAction
     private Vector returnRelativeOffset = null;
     private Vector returnOffset = null;
     private double returnSpeed;
-    private double staticSpeed;
+    private double startingSpeed;
     
 
     @Override
@@ -171,15 +171,17 @@ public class CustomProjectileAction extends CompoundAction
         returnDistanceSensitivity = parameters.getDouble("return_distance_sensitivity", 0.5);
         returnSpeed = parameters.getDouble("return_speed");
         
+        returnOffset = ConfigurationUtils.getVector(parameters, "return_offset");
+        returnRelativeOffset = ConfigurationUtils.getVector(parameters, "return_relative_offset");
+        
         range *= context.getMage().getRangeMultiplier();
 
         speed = parameters.getDouble("speed", 1);
         speed = parameters.getDouble("velocity", speed * 20);
-
-        staticSpeed = speed;
         
         if (returnToCaster)
         {
+            startingSpeed = speed;
             speed = returnSpeed;
         }
         
@@ -393,7 +395,8 @@ public class CustomProjectileAction extends CompoundAction
             
             if (distance < returnDistanceSensitivity) {
                 velocity = new Vector(0,0,0);
-                speed = staticSpeed;
+                speed = startingSpeed;
+                returnToCaster = false;
             }
             else
             {
