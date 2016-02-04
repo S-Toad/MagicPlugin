@@ -100,6 +100,9 @@ public class CustomProjectileAction extends CompoundAction
     private Vector returnOffset = null;
     private double returnSpeed;
     private double startingSpeed;
+    private boolean resetTimeOnReturn;
+    private boolean projectileFollowPlayer;
+    private Location magePreviousLocation;
     
 
     @Override
@@ -170,9 +173,11 @@ public class CustomProjectileAction extends CompoundAction
         returnToCaster = parameters.getBoolean("return_to_caster", false);
         returnDistanceSensitivity = parameters.getDouble("return_distance_sensitivity", 0.5);
         returnSpeed = parameters.getDouble("return_speed");
-        
         returnOffset = ConfigurationUtils.getVector(parameters, "return_offset");
         returnRelativeOffset = ConfigurationUtils.getVector(parameters, "return_relative_offset");
+        resetTimeOnReturn = parameters.getBoolean("reset_time_on_return", true);
+        
+        projectileFollowPlayer = parameters.getBoolean("projectile_follow_player", false);
         
         range *= context.getMage().getRangeMultiplier();
 
@@ -394,13 +399,18 @@ public class CustomProjectileAction extends CompoundAction
             double distance = projectileLocationOffset.clone().length();
             
             if (distance < returnDistanceSensitivity) {
-                targetVelocity = new Vector(0,0,0);
+                velocity = new Vector(0,0,0);
                 speed = startingSpeed;
                 returnToCaster = false;
+                launchLocation = context.getMage().getEyeLocation();
+                if (resetTimeOnReturn)
+                {
+                    flightTime = 0;
+                }
             }
             else
             {
-                targetVelocity = projectileLocationOffset.normalize();
+                velocity = projectileLocationOffset.normalize();
             }
         }
         else 
@@ -426,7 +436,7 @@ public class CustomProjectileAction extends CompoundAction
             }
             else if (reorient)
             {
-                targetVelocity = context.getDirection().clone().normalize();
+                targetVelocity = context.getMage().getDirection().clone().normalize();
             }
             else
             {
@@ -464,7 +474,6 @@ public class CustomProjectileAction extends CompoundAction
             if (velocityTransform != null)
             {
                 targetVelocity = velocityTransform.get(launchLocation, (double)flightTime / 1000);
-    
                 // This is expensive, but necessary for variable speed to work properly
                 // with targeting and range-checking
                 if (targetVelocity != null) {
@@ -479,6 +488,22 @@ public class CustomProjectileAction extends CompoundAction
             }
         }
 
+        if (projectileFollowPlayer) 
+        {
+            if (magePreviousLocation != null) 
+            {
+                Location mageCurrentLocation = context.getMage().getLocation();
+                Vector velocityOffset = mageCurrentLocation.toVector().subtract(magePreviousLocation.toVector());
+                
+                magePreviousLocation = mageCurrentLocation;
+                velocity = velocity.add(velocityOffset);
+            } 
+            else
+            {
+                magePreviousLocation = context.getMage().getLocation();
+            }
+        }
+        
         projectileLocation.setDirection(velocity);
 
         // Advance targeting to find Entity or Block
