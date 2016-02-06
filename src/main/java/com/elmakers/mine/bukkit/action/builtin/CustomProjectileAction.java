@@ -15,6 +15,8 @@ import com.elmakers.mine.bukkit.utility.ConfigurationUtils;
 import com.elmakers.mine.bukkit.utility.Target;
 import com.elmakers.mine.bukkit.utility.Targeting;
 import de.slikey.effectlib.util.DynamicLocation;
+import de.slikey.effectlib.util.VectorUtils;
+
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
@@ -96,9 +98,17 @@ public class CustomProjectileAction extends CompoundAction
     private Queue<PlanStep> plan;
     private Collection<ConfigurationSection> planConfiguration;
     
+    private boolean returnToCaster;
+    private Vector returnOffset;
+    private Vector returnRelativeOffset;
+    private boolean resetTimeOnPathChange;
+    private Double returnDistanceAway = null;
+    private boolean updateLaunchLocation;
+    
     private class PlanStep {
         public double distance;
         public long time;
+        public double returnBuffer;
         public ConfigurationSection parameters;
         public String effectsKey;
         
@@ -106,6 +116,7 @@ public class CustomProjectileAction extends CompoundAction
             distance = planConfig.getDouble("distance");
             time = planConfig.getLong("time");
             effectsKey = planConfig.getString("effects");
+            returnBuffer = planConfig.getDouble("return_buffer");
             parameters = planConfig;
         }
     };
@@ -137,16 +148,20 @@ public class CustomProjectileAction extends CompoundAction
         trackEntity = parameters.getBoolean("track_target", trackEntity);
         trackCursorRange = parameters.getDouble("track_range", trackCursorRange);
         trackSpeed = parameters.getDouble("track_speed", trackSpeed);
+        speed = parameters.getDouble("speed", 1);
+        speed = parameters.getDouble("velocity", speed * 20);
         if (parameters.isConfigurationSection("velocity_transform")) {
             velocityTransform = new VectorTransform(ConfigurationUtils.getConfigurationSection(parameters, "velocity_transform"));
         } else if (parameters.contains("velocity_transform")) {
             velocityTransform = null;
         }
-
         speed = parameters.getDouble("speed", speed);
         speed = parameters.getDouble("velocity", speed * 20);
         tickSize = parameters.getDouble("tick_size",tickSize);
         ignoreTargeting = parameters.getBoolean("ignore_targeting", ignoreTargeting);
+        returnToCaster = parameters.getBoolean("return_to_caster", returnToCaster);
+        resetTimeOnPathChange = parameters.getBoolean("reset_time_on_path_change", resetTimeOnPathChange);
+        updateLaunchLocation = parameters.getBoolean("update_launch_location", updateLaunchLocation);
     }
 
     @Override
@@ -165,6 +180,9 @@ public class CustomProjectileAction extends CompoundAction
         speed = 1;
         tickSize = 0.5;
         ignoreTargeting = false;
+        returnToCaster = false;
+        resetTimeOnPathChange = false;
+        updateLaunchLocation = false;
         modifyParameters(parameters);
         
         // These parameters can't be changed mid-flight
@@ -196,6 +214,9 @@ public class CustomProjectileAction extends CompoundAction
         blockHitLimit = parameters.getInt("block_hit_count", hitLimit);
         pitchMin = parameters.getInt("pitch_min", 90);
         pitchMax = parameters.getInt("pitch_max", -90);
+        
+        returnOffset = ConfigurationUtils.getVector(parameters, "return_offset");
+        returnRelativeOffset = ConfigurationUtils.getVector(parameters, "return_relative_offset");
         
         range *= context.getMage().getRangeMultiplier();
 
@@ -251,6 +272,7 @@ public class CustomProjectileAction extends CompoundAction
         } else {
             plan = null;
         }
+        returnDistanceAway = null;
     }
 
     @Override
@@ -378,7 +400,7 @@ public class CustomProjectileAction extends CompoundAction
         // Check plan
         if (plan != null && !plan.isEmpty()) {
             PlanStep next = plan.peek();
-            if ((next.distance > 0 && distanceTravelled > next.distance) || next.time > 0 && flightTime > next.time)
+            if ((next.distance > 0 && distanceTravelled > next.distance) || (next.time > 0 && flightTime > next.time) || (next.returnBuffer > 0 && returnDistanceAway != null && returnDistanceAway < next.returnBuffer))
             {
                 plan.remove();
                 if (next.parameters != null) {
@@ -388,9 +410,16 @@ public class CustomProjectileAction extends CompoundAction
                     startProjectileEffects(context, next.effectsKey);
                 }
                 context.getMage().sendDebugMessage("Changing flight plan at distance " + ((int)distanceTravelled) + " and time " + flightTime, 4);
+                if (resetTimeOnPathChange)
+                {
+                    flightTime = 0;
+                }
             }
         }
-
+        
+        if (updateLaunchLocation) {
+            launchLocation = context.getWandLocation().clone();
+        }
         // Advance position
         // We default to 50 ms travel time (one tick) for the first iteration.
         long delta = lastUpdate > 0 ? now - lastUpdate : 50;
@@ -420,7 +449,7 @@ public class CustomProjectileAction extends CompoundAction
         }
         else if (reorient)
         {
-            targetVelocity = context.getDirection().clone().normalize();
+            targetVelocity = context.getMage().getDirection().clone().normalize();
         }
         else
         {
@@ -470,6 +499,26 @@ public class CustomProjectileAction extends CompoundAction
                 }
                 velocity = targetVelocity;
             }
+        }
+        
+        if (returnToCaster)
+        {
+            Vector targetLocation = context.getMage().getEyeLocation().toVector();
+            
+            if (returnOffset != null)
+            {
+                targetLocation.add(returnOffset);
+            }      
+            if (returnRelativeOffset != null)
+            {
+                Vector relativeOffset = VectorUtils.rotateVector(returnRelativeOffset, context.getMage().getEyeLocation());
+                targetLocation.add(relativeOffset);
+            }
+            
+            Vector projectileOffset = targetLocation.subtract(projectileLocation.toVector());
+            returnDistanceAway = projectileOffset.length();
+            velocity = projectileOffset.normalize();
+            
         }
 
         projectileLocation.setDirection(velocity);
