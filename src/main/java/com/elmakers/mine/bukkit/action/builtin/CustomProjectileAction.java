@@ -264,6 +264,7 @@ public class CustomProjectileAction extends CompoundAction
         attachedDeadline = 0;
         attachedOffset = null;
         missed = false;
+        returnDistanceAway = null;
         
         // This has to be done here, so that the plan is not shared across parallel instances
         if (planConfiguration != null && !planConfiguration.isEmpty()) {
@@ -274,7 +275,6 @@ public class CustomProjectileAction extends CompoundAction
         } else {
             plan = null;
         }
-        returnDistanceAway = null;
     }
 
     @Override
@@ -416,18 +416,16 @@ public class CustomProjectileAction extends CompoundAction
                 {
                     flightTime = 0;
                 }
+                if (updateLaunchLocation) {
+                    launchLocation = context.getMage().getWandLocation().clone();
+                }
             }
-        }
-        
-        if (updateLaunchLocation) {
-            launchLocation = context.getWandLocation().clone();
         }
         // Advance position
         // We default to 50 ms travel time (one tick) for the first iteration.
         long delta = lastUpdate > 0 ? now - lastUpdate : 50;
         lastUpdate = now;
         flightTime += delta;
-
         // Apply gravity, drag or other velocity modifiers
         Vector targetVelocity = null;
         if (trackEntity)
@@ -485,7 +483,6 @@ public class CustomProjectileAction extends CompoundAction
             }
             launchLocation.setDirection(velocity);
         }
-
         if (velocityTransform != null)
         {
             targetVelocity = velocityTransform.get(launchLocation, (double)flightTime / 1000);
