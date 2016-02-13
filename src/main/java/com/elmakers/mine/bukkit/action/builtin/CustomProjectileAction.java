@@ -105,6 +105,8 @@ public class CustomProjectileAction extends CompoundAction
     private boolean resetTimeOnPathChange;
     private Double returnDistanceAway = null;
     private boolean updateLaunchLocation;
+    private Vector previousLocation;
+    private boolean projectileFollowPlayer;
     
     private class PlanStep {
         public double distance;
@@ -164,6 +166,7 @@ public class CustomProjectileAction extends CompoundAction
         returnToCaster = parameters.getBoolean("return_to_caster", returnToCaster);
         resetTimeOnPathChange = parameters.getBoolean("reset_time_on_path_change", resetTimeOnPathChange);
         updateLaunchLocation = parameters.getBoolean("update_launch_location", updateLaunchLocation);
+        projectileFollowPlayer = parameters.getBoolean("projectile_follow_player", projectileFollowPlayer);
     }
 
     @Override
@@ -185,6 +188,7 @@ public class CustomProjectileAction extends CompoundAction
         returnToCaster = false;
         resetTimeOnPathChange = false;
         updateLaunchLocation = false;
+        projectileFollowPlayer = false;
         modifyParameters(parameters);
         
         // These parameters can't be changed mid-flight
@@ -416,10 +420,11 @@ public class CustomProjectileAction extends CompoundAction
                 {
                     flightTime = 0;
                 }
-                if (updateLaunchLocation) {
-                    launchLocation = context.getMage().getWandLocation().clone();
-                }
             }
+        }
+        if (updateLaunchLocation) 
+        {
+            launchLocation = context.getMage().getWandLocation().clone();
         }
         // Advance position
         // We default to 50 ms travel time (one tick) for the first iteration.
@@ -440,12 +445,17 @@ public class CustomProjectileAction extends CompoundAction
         }
         else if (trackCursorRange > 0)
         {
+            Vector playerCursor = context.getMage().getDirection().clone().normalize();
+            Vector targetPoint = playerCursor.multiply(trackCursorRange);
+            Vector worldPoint = targetPoint.add(context.getMage().getEyeLocation().clone().toVector());
+            Vector projectileOffset = worldPoint.subtract(projectileLocation.clone().toVector());
+            targetVelocity = projectileOffset.normalize();          
             /* We need to first find out where the player is looking and multiply it by how far the player wants the whip to extend
         	 * Finally after all that, we adjust the velocity of the projectile to go towards the cursor point
         	 */
-            Vector playerCursor = context.getDirection().clone().normalize().multiply(trackCursorRange);
-            playerCursor = context.getEyeLocation().toVector().add(playerCursor);
-            targetVelocity = playerCursor.subtract(projectileLocation.toVector()).normalize();
+            //Vector playerCursor = context.getMage().getDirection().clone().normalize().multiply(trackCursorRange);
+            //playerCursor = context.getMage().getEyeLocation().clone().toVector().add(playerCursor);
+            //targetVelocity = playerCursor.subtract(projectileLocation.toVector()).normalize();
         }
         else if (reorient)
         {
@@ -499,7 +509,6 @@ public class CustomProjectileAction extends CompoundAction
                 velocity = targetVelocity;
             }
         }
-        
         if (returnToCaster)
         {
             Vector targetLocation = context.getMage().getEyeLocation().toVector();
@@ -514,12 +523,27 @@ public class CustomProjectileAction extends CompoundAction
                 targetLocation.add(relativeOffset);
             }
             
-            Vector projectileOffset = targetLocation.subtract(projectileLocation.toVector());
+            Vector projectileOffset = targetLocation.clone().subtract(projectileLocation.toVector());
             returnDistanceAway = projectileOffset.length();
             velocity = projectileOffset.normalize();
             
         }
-
+        
+        if (projectileFollowPlayer)
+        {
+            Vector currentLocation = context.getMage().getLocation().toVector();
+            if (previousLocation != null)
+            {
+                Vector offset = currentLocation.clone().subtract(previousLocation);
+                previousLocation = currentLocation;
+                velocity = velocity.add(offset);
+            }
+            else
+            {
+                previousLocation = currentLocation;
+            }
+        }
+        
         projectileLocation.setDirection(velocity);
 
         // Advance targeting to find Entity or Block
