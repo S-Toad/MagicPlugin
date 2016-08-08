@@ -23,6 +23,7 @@ public class WandTemplate implements com.elmakers.mine.bukkit.api.wand.WandTempl
     private Map<String, Collection<EffectPlayer>> effects = new HashMap<String, Collection<EffectPlayer>>();
     private Collection<EffectPlay> currentEffects = new ArrayList<EffectPlay>();
     private Set<String> tags;
+    private Set<String> categories;
     private String creator;
     private String creatorId;
     private String migrateTemplate;
@@ -76,6 +77,13 @@ public class WandTemplate implements com.elmakers.mine.bukkit.api.wand.WandTempl
             tags = new HashSet<String>(tagList);
         } else {
             tags = null;
+        }
+
+        Collection<String> categoriesList = ConfigurationUtils.getStringList(node, "categories");
+        if (categoriesList != null) {
+            categories = new HashSet<String>(categoriesList);
+        } else {
+            categories = null;
         }
     }
 
@@ -154,6 +162,11 @@ public class WandTemplate implements com.elmakers.mine.bukkit.api.wand.WandTempl
     @Override
     public String getCreator() {
         return creator;
+    }
+
+    @Override
+    public Set<String> getCategories() {
+        return categories;
     }
 
     @Override
