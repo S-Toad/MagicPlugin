@@ -5,9 +5,9 @@ import com.elmakers.mine.bukkit.utility.CompatibilityUtils;
 import com.elmakers.mine.bukkit.utility.ConfigurationUtils;
 import com.elmakers.mine.bukkit.utility.InventoryUtils;
 import com.elmakers.mine.bukkit.utility.NMSUtils;
+import com.google.common.collect.ImmutableSet;
 
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Set;
 
 import org.bukkit.ChatColor;
@@ -26,6 +26,7 @@ public class ItemData implements com.elmakers.mine.bukkit.api.item.ItemData {
     public ItemData(ItemStack itemStack) {
         this.item = NMSUtils.getCopy(itemStack);
         this.key = itemStack.getType().toString();
+        categories = ImmutableSet.of();
     }
     
     public ItemData(String materialKey) throws Exception {
@@ -37,6 +38,8 @@ public class ItemData implements com.elmakers.mine.bukkit.api.item.ItemData {
             throw new Exception("Invalid item key: " + materialKey);
         }
         key = materialKey;
+        
+        categories = ImmutableSet.of();
     }
     
     public ItemData(String key, ConfigurationSection configuration) throws Exception {
@@ -85,10 +88,10 @@ public class ItemData implements com.elmakers.mine.bukkit.api.item.ItemData {
         }
 
         Collection<String> categoriesList = ConfigurationUtils.getStringList(configuration, "categories");
-        if (categoriesList != null) {
-            categories = new HashSet<String>(categoriesList);
+        if (categoriesList == null) {
+            categories = ImmutableSet.of();
         } else {
-            categories = null;
+            categories = ImmutableSet.copyOf(categoriesList);
         }
     }
     
@@ -99,6 +102,8 @@ public class ItemData implements com.elmakers.mine.bukkit.api.item.ItemData {
         this.key = key;
         this.item = item;
         this.worth = worth;
+        
+        categories = ImmutableSet.of();
     }
 
     @Override
