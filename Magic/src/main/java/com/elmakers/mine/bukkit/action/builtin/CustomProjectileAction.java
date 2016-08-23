@@ -374,20 +374,7 @@ public class CustomProjectileAction extends CompoundAction
                 projectileLocation = context.getLocation().clone();
             }
             
-            /* This feels confusing however...
-             * Looking straight down in Minecraft gives a pitch of 90
-             * While looking straight up is a pitch of -90
-             * We don't want to normalize these values as other functions need the non-normalize numbers.
-             * So if the projectile pitch value is found to be higher or lower than the min or max, it's set to the min or max respectively
-             */
-            if (pitchMin < projectileLocation.getPitch())
-            {
-                projectileLocation.setPitch(pitchMin);
-            } 
-            else if (pitchMax > projectileLocation.getPitch())
-            {
-                projectileLocation.setPitch(pitchMax);
-            }
+            setPitch(projectileLocation);
             launchLocation = projectileLocation.clone();
 
             if (targetLocation != null && !reorient && useTargetLocation) {
@@ -476,7 +463,9 @@ public class CustomProjectileAction extends CompoundAction
             /* We need to first find out where the player is looking and multiply it by how far the player wants the whip to extend
              * Finally after all that, we adjust the velocity of the projectile to go towards the cursor point
              */
-            Vector playerCursor = context.getMage().getDirection().clone().normalize();
+            Location playerLocation = context.getMage().getLocation().clone();
+            setPitch(playerLocation);
+            Vector playerCursor = playerLocation.getDirection();
             Vector targetPoint = playerCursor.multiply(trackCursorRange);
             Vector worldPoint = targetPoint.add(context.getMage().getEyeLocation().clone().toVector());
             Vector projectileOffset = worldPoint.subtract(projectileLocation.clone().toVector());
@@ -484,7 +473,9 @@ public class CustomProjectileAction extends CompoundAction
         }
         else if (reorient)
         {
-            targetVelocity = context.getMage().getDirection().clone().normalize();
+            Location playerLocation = context.getMage().getLocation().clone();
+            setPitch(playerLocation);
+            targetVelocity = playerLocation.getDirection();
         }
         else
         {
@@ -906,6 +897,23 @@ public class CustomProjectileAction extends CompoundAction
                 effectPlayer.setEffectPlayList(activeProjectileEffects);
                 effectPlayer.startEffects(effectLocation, null);
             }
+        }
+    }
+    
+    protected void setPitch(Location loc) {
+        /* This feels confusing however...
+         * Looking straight down in Minecraft gives a pitch of 90
+         * While looking straight up is a pitch of -90
+         * We don't want to normalize these values as other functions need the non-normalize numbers.
+         * So if the projectile pitch value is found to be higher or lower than the min or max, it's set to the min or max respectively
+         */
+        if (pitchMin < loc.getPitch())
+        {
+            loc.setPitch(pitchMin);
+        } 
+        else if (pitchMax > loc.getPitch())
+        {
+            loc.setPitch(pitchMax);
         }
     }
 }
