@@ -63,6 +63,7 @@ public class CustomProjectileAction extends CompoundAction
     private boolean trackEntity;
     private double trackCursorRange;
     private double trackSpeed;
+    private double trackDistanceModifier;
     private int targetSelfTimeout;
     private Boolean targetSelf;
     private boolean breaksBlocks;
@@ -252,6 +253,8 @@ public class CustomProjectileAction extends CompoundAction
 
         returnOffset = ConfigurationUtils.getVector(parameters, "return_offset");
         returnRelativeOffset = ConfigurationUtils.getVector(parameters, "return_relative_offset");
+        
+        trackDistanceModifier = parameters.getDouble("track_distance_modifier", 0D);
 
         range *= context.getMage().getRangeMultiplier();
 
@@ -482,7 +485,17 @@ public class CustomProjectileAction extends CompoundAction
             Vector targetPoint = playerCursor.multiply(trackCursorRange);
             Vector worldPoint = targetPoint.add(context.getMage().getEyeLocation().clone().toVector());
             Vector projectileOffset = worldPoint.subtract(projectileLocation.clone().toVector());
-            targetVelocity = projectileOffset.normalize();
+            targetVelocity = projectileOffset.clone().normalize();
+            
+            if (trackDistanceModifier != 0) {
+                // This is if we want a projectile to speed up or slow down as it gets closer to it's targeted location.
+                // For example, if our trackDistanceModifier is 0.1 and the distance away from our point is 5, it'll adjust the velocity by 0.5, or half it's speed.
+                // Likewise, if the same projectiile was 20 blocks away, it'll adjust the speed by 2, or twice as fast
+                double distance = projectileOffset.length();
+                double distanceVelocityModifier = trackDistanceModifier * distance;
+                
+                targetVelocity = targetVelocity.multiply(distanceVelocityModifier);
+            }
         }
         else if (reorient)
         {
